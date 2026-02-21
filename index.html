@@ -310,30 +310,56 @@
       }, 3000);
     }
 
-    async function fetchIPInfo(ip = '') {
+    function fetchIPInfo(ip = '') {
       const form = document.getElementById('search-form');
       form.classList.add('loading');
 
-      try {
-        const url = ip 
-          ? `https://ip-api.com/json/${encodeURIComponent(ip)}`
-          : 'https://ip-api.com/json/';
-        
-        const response = await fetch(url);
-        const data = await response.json();
+      // Create a unique callback name
+      const callbackName = 'jsonp_callback_' + Math.round(100000 * Math.random());
+      
+      // Build URL with callback parameter
+      const url = ip 
+        ? `https://ip-api.com/json/${encodeURIComponent(ip)}?callback=${callbackName}`
+        : `https://ip-api.com/json/?callback=${callbackName}`;
 
+      // Create callback function
+      window[callbackName] = function(data) {
         if (data.status === 'fail') {
           showError('Invalid IP address or API error');
-          return;
+        } else {
+          updateDisplay(data);
         }
-
-        updateDisplay(data);
-      } catch (error) {
-        showError('Failed to fetch IP information');
-        console.error(error);
-      } finally {
+        
+        // Clean up
+        document.head.removeChild(script);
+        delete window[callbackName];
         form.classList.remove('loading');
-      }
+      };
+
+      // Create script element
+      const script = document.createElement('script');
+      script.src = url;
+      
+      // Handle errors
+      script.onerror = function() {
+        showError('Failed to fetch IP information');
+        document.head.removeChild(script);
+        delete window[callbackName];
+        form.classList.remove('loading');
+      };
+
+      // Add script to document
+      document.head.appendChild(script);
+      
+      // Timeout fallback
+      setTimeout(function() {
+        if (window[callbackName]) {
+          showError('Request timeout');
+          document.head.removeChild(script);
+          delete window[callbackName];
+          form.classList.remove('loading');
+        }
+      }, 10000);
     }
 
     document.getElementById('search-form').addEventListener('submit', (e) => {
